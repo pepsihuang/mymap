@@ -226,41 +226,101 @@ document.addEventListener('keydown', e => {
 
 map.once('click', () => document.getElementById('hint').classList.add('hidden'));
 
-// ========== 签证配色地图 ==========
+
+
+// ========== 签证配色地图 v2 ==========
 
 const GEOJSON_URLS = [
-    'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
-    'https://cdn.jsdelivr.net/npm/world-countries@5/world/countries.geojson'
+    'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson'
 ];
 
 const POLICY_COLORS = {
-    free:    { fill: '#34a853', stroke: '#2d9249', label: '免签' },   // 绿色
-    arrival: { fill: '#fbbc04', stroke: '#e0a800', label: '落地签' },  // 黄色
-    evisa:   { fill: '#4285f4', stroke: '#3367d6', label: '电子签' },  // 蓝色
-    visa:    { fill: '#ea4335', stroke: '#c5221f', label: '需签证' },  // 红色
-    home:    { fill: '#ff6d00', stroke: '#e65100', label: '本国' },    // 橙色
-    none:    { fill: '#9e9e9e', stroke: '#757575', label: '无数据' }   // 灰色
+    free:    { fill: '#34a853', stroke: '#2d9249', label: '免签' },
+    arrival: { fill: '#fbbc04', stroke: '#e0a800', label: '落地签' },
+    evisa:   { fill: '#4285f4', stroke: '#3367d6', label: '电子签' },
+    visa:    { fill: '#ea4335', stroke: '#c5221f', label: '需签证' },
+    home:    { fill: '#ff6d00', stroke: '#e65100', label: '本国' },
+    none:    { fill: '#cccccc', stroke: '#aaaaaa', label: '无数据' }
 };
 
 let colorLayer = null;
 let colorEnabled = false;
 let geoJsonCache = null;
 
+// 英文名 -> ISO代码 映射（兜底）
+const NAME_TO_CODE = {
+    'China':'CN','Japan':'JP','South Korea':'KR','North Korea':'KP',
+    'Mongolia':'MN','Thailand':'TH','Vietnam':'VN','Malaysia':'MY',
+    'Singapore':'SG','Indonesia':'ID','Philippines':'PH','Myanmar':'MM',
+    'Laos':'LA','Cambodia':'KH','Brunei':'BN','East Timor':'TL',
+    'Pakistan':'PK','Bangladesh':'BD','India':'IN','Nepal':'NP',
+    'Sri Lanka':'LK','Maldives':'MV','Bhutan':'BT','Afghanistan':'AF',
+    'Iran':'IR','Iraq':'IQ','Saudi Arabia':'SA','United Arab Emirates':'AE',
+    'Qatar':'QA','Kuwait':'KW','Bahrain':'BH','Oman':'OM',
+    'Yemen':'YE','Jordan':'JO','Lebanon':'LB','Syria':'SY',
+    'Israel':'IL','Turkey':'TR','Cyprus':'CY','Georgia':'GE',
+    'Armenia':'AM','Azerbaijan':'AZ','Kazakhstan':'KZ','Uzbekistan':'UZ',
+    'Kyrgyzstan':'KG','Tajikistan':'TJ','Turkmenistan':'TM',
+    'Russia':'RU','Belarus':'BY','Ukraine':'UA','Poland':'PL',
+    'Germany':'DE','France':'FR','Italy':'IT','Spain':'ES',
+    'Portugal':'PT','United Kingdom':'GB','Ireland':'IE','Netherlands':'NL',
+    'Belgium':'BE','Switzerland':'CH','Austria':'AT','Czech Republic':'CZ',
+    'Czechia':'CZ','Slovakia':'SK','Hungary':'HU','Slovenia':'SI',
+    'Croatia':'HR','Bosnia and Herzegovina':'BA','Serbia':'RS',
+    'Montenegro':'ME','Albania':'AL','North Macedonia':'MK',
+    'Romania':'RO','Bulgaria':'BG','Greece':'GR','Malta':'MT',
+    'San Marino':'SM','Luxembourg':'LU','Iceland':'IS','Norway':'NO',
+    'Sweden':'SE','Finland':'FI','Denmark':'DK','Estonia':'EE',
+    'Latvia':'LV','Lithuania':'LT',
+    'Egypt':'EG','Morocco':'MA','Tunisia':'TN','Algeria':'DZ',
+    'Ethiopia':'ET','Djibouti':'DJ','Kenya':'KE','Uganda':'UG',
+    'Tanzania':'TZ','Rwanda':'RW','Senegal':'SN','Angola':'AO',
+    'Zambia':'ZM','Zimbabwe':'ZW','Mozambique':'MZ','Madagascar':'MG',
+    'Mauritius':'MU','Seychelles':'SC','Comoros':'KM',
+    'Botswana':'BW','South Africa':'ZA','Ghana':'GH',
+    'Ivory Coast':'CI','Cape Verde':'CV','Mauritania':'MR',
+    'Sao Tome and Principe':'ST','Gabon':'GA','Namibia':'NA',
+    'Burundi':'BI','South Sudan':'SS','Malawi':'MW',
+    'United States':'US','Canada':'CA','Mexico':'MX',
+    'Guatemala':'GT','Honduras':'HN','El Salvador':'SV',
+    'Nicaragua':'NI','Costa Rica':'CR','Panama':'PA','Cuba':'CU',
+    'Dominican Republic':'DO','Barbados':'BB',
+    'Antigua and Barbuda':'AG','Dominica':'DM','Grenada':'GD',
+    'Bahamas':'BS','Brazil':'BR','Argentina':'AR','Chile':'CL',
+    'Peru':'PE','Colombia':'CO','Venezuela':'VE','Ecuador':'EC',
+    'Bolivia':'BO','Paraguay':'PY','Uruguay':'UY','Guyana':'GY',
+    'Suriname':'SR','Haiti':'HT',
+    'Australia':'AU','New Zealand':'NZ','Fiji':'FJ',
+    'Papua New Guinea':'PG','Solomon Islands':'SB','Vanuatu':'VU',
+    'Tonga':'TO','Samoa':'WS','Palau':'PW',
+    'Taiwan':'TW','Hong Kong':'HK','Macau':'MO',
+    'The Bahamas':'BS','United Republic of Tanzania':'TZ',
+    'Democratic Republic of the Congo':'CD','Republic of the Congo':'CG',
+    'eSwatini':'SZ','Swaziland':'SZ','Burkina Faso':'BF',
+    'Guinea-Bissau':'GW','Sierra Leone':'SL','Liberia':'LR',
+    'Gambia':'GM','Central African Republic':'CF','Chad':'TD',
+    'Niger':'NE','Nigeria':'NG','Mali':'ML','Cameroon':'CM',
+    'Equatorial Guinea':'GQ','Somalia':'SO','Eritrea':'ER',
+    'Sudan':'SD','Libya':'LY','Palestine':'PS',
+    'Antarctica':'AQ','Vatican':'VA','Vatican City':'VA',
+    'Monaco':'MC','Andorra':'AD','Liechtenstein':'LI',
+    'Belize':'BZ','Jamaica':'JM','Trinidad and Tobago':'TT',
+    'Saint Kitts and Nevis':'KN','Saint Lucia':'LC',
+    'Saint Vincent and the Grenadines':'VC',
+    'São Tomé and Príncipe':'ST'
+};
+
 const colorToggle = document.getElementById('colorToggle');
 
 colorToggle.addEventListener('click', async function() {
     if (colorEnabled) {
-        // 关闭颜色层
-        if (colorLayer) {
-            map.removeLayer(colorLayer);
-            colorLayer = null;
-        }
+        if (colorLayer) { map.removeLayer(colorLayer); colorLayer = null; }
         colorEnabled = false;
         colorToggle.classList.remove('active');
+        colorToggle.textContent = '🎨 签证配色';
         return;
     }
 
-    // 开启颜色层
     colorToggle.textContent = '⏳ 加载中…';
 
     try {
@@ -268,12 +328,17 @@ colorToggle.addEventListener('click', async function() {
             geoJsonCache = await loadGeoJson();
         }
 
+        let matched = 0, total = 0, debugCodes = [];
+
         colorLayer = L.geoJSON(geoJsonCache, {
             style: function(feature) {
-                const code = feature.properties.ISO_A2 || feature.properties.ISO_A3 || '';
+                const code = getCountryCode(feature);
                 const data = VISA_DATA[code];
                 const policy = data ? data.policy : 'none';
                 const colors = POLICY_COLORS[policy] || POLICY_COLORS.none;
+                if (data) matched++;
+                total++;
+                if (debugCodes.length < 10) debugCodes.push(code || '(empty)');
                 return {
                     fillColor: colors.fill,
                     fillOpacity: 0.55,
@@ -283,14 +348,13 @@ colorToggle.addEventListener('click', async function() {
                 };
             },
             onEachFeature: function(feature, layer) {
-                const code = feature.properties.ISO_A2 || feature.properties.ISO_A3 || '';
+                const code = getCountryCode(feature);
                 const data = VISA_DATA[code];
                 if (data) {
                     const s = POLICY_COLORS[data.policy] || POLICY_COLORS.none;
-                    layer.bindTooltip(
-                        `${data.flag} ${data.cn}：${s.label}${data.duration !== '—' ? ' ' + data.duration : ''}`,
-                        { sticky: true, className: 'country-tooltip' }
-                    );
+                    layer.bindTooltip(`${data.flag} ${data.cn}：${s.label}${data.duration !== '—' ? ' '+data.duration : ''}`, {
+                        sticky: true, className: 'country-tooltip'
+                    });
                     layer.on('click', function(e) {
                         L.DomEvent.stopPropagation(e);
                         showVisaInfo(code);
@@ -300,37 +364,58 @@ colorToggle.addEventListener('click', async function() {
                         }).addTo(map);
                         document.getElementById('hint').classList.add('hidden');
                     });
+                } else {
+                    const name = feature.properties.ADMIN || '';
+                    layer.bindTooltip(`🌍 ${name}：暂无数据`, { sticky: true, className: 'country-tooltip' });
                 }
             }
         }).addTo(map);
 
+        console.log('Color:', matched + '/' + total, 'matched. Sample codes:', debugCodes.join(', '));
         colorEnabled = true;
-        colorToggle.textContent = '🎨 已开启';
+        colorToggle.textContent = `🎨 已开启 (${matched}国)`;
         colorToggle.classList.add('active');
 
     } catch(err) {
-        console.error('GeoJSON load failed:', err);
-        colorToggle.textContent = '❌ 加载失败';
-        setTimeout(() => { colorToggle.textContent = '🎨 签证配色'; }, 2000);
+        console.error('Color error:', err);
+        colorToggle.textContent = '❌ ' + err.message;
+        setTimeout(() => { colorToggle.textContent = '🎨 签证配色'; }, 3000);
     }
 });
 
-// 尝试多个URL加载GeoJSON
+// 从 GeoJSON feature 提取国家代码
+function getCountryCode(feature) {
+    const p = feature.properties || {};
+    // 1. 直接取 ISO_A2
+    let code = String(p.ISO_A2 || '').trim().toUpperCase();
+    if (code && code !== '-1' && code !== '-99' && code.length === 2) return code;
+    // 2. 用英文名查映射
+    const name = p.ADMIN || p.name || p.NAME || '';
+    if (NAME_TO_CODE[name]) return NAME_TO_CODE[name];
+    // 3. 模糊匹配
+    for (const [n, c] of Object.entries(NAME_TO_CODE)) {
+        if (name.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(name.toLowerCase())) {
+            return c;
+        }
+    }
+    return '';
+}
+
+// 加载 GeoJSON
 async function loadGeoJson() {
     for (const url of GEOJSON_URLS) {
         try {
-            console.log('Trying:', url);
             const resp = await fetch(url);
             if (!resp.ok) continue;
             const data = await resp.json();
             if (data.features && data.features.length > 100) {
-                console.log('Loaded GeoJSON:', data.features.length, 'features from', url);
+                console.log('GeoJSON OK:', data.features.length, 'features from', url);
                 return data;
             }
         } catch(e) {
-            console.warn('Failed:', url, e.message);
+            console.warn('GeoJSON failed:', url, e.message);
         }
     }
-    throw new Error('所有 GeoJSON 源加载失败');
+    throw new Error('GeoJSON加载失败，请检查网络');
 }
 console.log("Map ready. Countries:", Object.keys(VISA_DATA).length);
