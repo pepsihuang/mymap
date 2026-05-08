@@ -332,3 +332,37 @@ body {
 .panel::-webkit-scrollbar-track { background: transparent; }
 .panel::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
 .panel::-webkit-scrollbar-thumb:hover { background: #bbb; }
+
+/* ===== 签证颜色开关 ===== */
+.color-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #555;
+    user-select: none;
+    white-space: nowrap;
+    padding: 5px 10px;
+    background: #f0f0f0;
+    border-radius: 16px;
+    transition: background 0.2s;
+}
+.color-toggle:hover { background: #e0e0e0; }
+.color-toggle.active { background: #e8f0fe; color: #1a73e8; }
+
+/* 地图上国家名字标签 */
+.country-label {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 国家浮窗提示 */
+.country-tooltip {
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-family: -apple-system, 'PingFang SC', sans-serif;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}

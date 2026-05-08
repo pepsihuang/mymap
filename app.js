@@ -226,4 +226,111 @@ document.addEventListener('keydown', e => {
 
 map.once('click', () => document.getElementById('hint').classList.add('hidden'));
 
-console.log('Map ready. Countries:', Object.keys(VISA_DATA).length);
+// ========== 签证配色地图 ==========
+
+const GEOJSON_URLS = [
+    'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
+    'https://cdn.jsdelivr.net/npm/world-countries@5/world/countries.geojson'
+];
+
+const POLICY_COLORS = {
+    free:    { fill: '#34a853', stroke: '#2d9249', label: '免签' },   // 绿色
+    arrival: { fill: '#fbbc04', stroke: '#e0a800', label: '落地签' },  // 黄色
+    evisa:   { fill: '#4285f4', stroke: '#3367d6', label: '电子签' },  // 蓝色
+    visa:    { fill: '#ea4335', stroke: '#c5221f', label: '需签证' },  // 红色
+    home:    { fill: '#ff6d00', stroke: '#e65100', label: '本国' },    // 橙色
+    none:    { fill: '#9e9e9e', stroke: '#757575', label: '无数据' }   // 灰色
+};
+
+let colorLayer = null;
+let colorEnabled = false;
+let geoJsonCache = null;
+
+const colorToggle = document.getElementById('colorToggle');
+
+colorToggle.addEventListener('click', async function() {
+    if (colorEnabled) {
+        // 关闭颜色层
+        if (colorLayer) {
+            map.removeLayer(colorLayer);
+            colorLayer = null;
+        }
+        colorEnabled = false;
+        colorToggle.classList.remove('active');
+        return;
+    }
+
+    // 开启颜色层
+    colorToggle.textContent = '⏳ 加载中…';
+
+    try {
+        if (!geoJsonCache) {
+            geoJsonCache = await loadGeoJson();
+        }
+
+        colorLayer = L.geoJSON(geoJsonCache, {
+            style: function(feature) {
+                const code = feature.properties.ISO_A2 || feature.properties.ISO_A3 || '';
+                const data = VISA_DATA[code];
+                const policy = data ? data.policy : 'none';
+                const colors = POLICY_COLORS[policy] || POLICY_COLORS.none;
+                return {
+                    fillColor: colors.fill,
+                    fillOpacity: 0.55,
+                    color: colors.stroke,
+                    weight: 1.2,
+                    opacity: 0.9
+                };
+            },
+            onEachFeature: function(feature, layer) {
+                const code = feature.properties.ISO_A2 || feature.properties.ISO_A3 || '';
+                const data = VISA_DATA[code];
+                if (data) {
+                    const s = POLICY_COLORS[data.policy] || POLICY_COLORS.none;
+                    layer.bindTooltip(
+                        `${data.flag} ${data.cn}：${s.label}${data.duration !== '—' ? ' ' + data.duration : ''}`,
+                        { sticky: true, className: 'country-tooltip' }
+                    );
+                    layer.on('click', function(e) {
+                        L.DomEvent.stopPropagation(e);
+                        showVisaInfo(code);
+                        if (currentMarker) map.removeLayer(currentMarker);
+                        currentMarker = L.circleMarker(e.latlng, {
+                            radius: 10, fillColor: '#4285f4', color: '#fff', weight: 3, fillOpacity: 0.9
+                        }).addTo(map);
+                        document.getElementById('hint').classList.add('hidden');
+                    });
+                }
+            }
+        }).addTo(map);
+
+        colorEnabled = true;
+        colorToggle.textContent = '🎨 已开启';
+        colorToggle.classList.add('active');
+
+    } catch(err) {
+        console.error('GeoJSON load failed:', err);
+        colorToggle.textContent = '❌ 加载失败';
+        setTimeout(() => { colorToggle.textContent = '🎨 签证配色'; }, 2000);
+    }
+});
+
+// 尝试多个URL加载GeoJSON
+async function loadGeoJson() {
+    for (const url of GEOJSON_URLS) {
+        try {
+            console.log('Trying:', url);
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            if (data.features && data.features.length > 100) {
+                console.log('Loaded GeoJSON:', data.features.length, 'features from', url);
+                return data;
+            }
+        } catch(e) {
+            console.warn('Failed:', url, e.message);
+        }
+    }
+    throw new Error('所有 GeoJSON 源加载失败');
+}
+console.log("Map ready. Countries:", Object.keys(VISA_DATA).length);
