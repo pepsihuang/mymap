@@ -133,12 +133,14 @@ const POLICY = {
 function showVisaInfo(code) {
     const d = VISA_DATA[code];
     const s = POLICY[d.policy] || POLICY.none;
+    const baikeUrl = `https://baike.baidu.com/item/${encodeURIComponent(d.cn)}`;
     let h = `
         <div class="panel-header">
             <div class="panel-flag">${d.flag}</div>
             <div class="panel-country">${d.cn}</div>
             <div class="panel-country-en">${d.en}</div>
             <div class="panel-status ${s.cls}">${s.txt} · ${s.label}</div>
+            <a class="baike-link" href="${baikeUrl}" target="_blank" rel="noopener noreferrer">百度百科</a>
         </div>
         <div class="panel-body">
             <div class="info-row"><div class="info-icon">⏱️</div><div class="info-content"><div class="info-label">可停留天数</div><div class="info-value highlight">${d.duration}</div></div></div>

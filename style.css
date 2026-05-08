@@ -206,6 +206,26 @@ body {
 .status-visa { background: #ea4335; }
 .status-none { background: #999; }
 
+.baike-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 10px;
+    padding: 6px 14px;
+    border: 1px solid #d8e3f8;
+    border-radius: 16px;
+    background: #f5f8ff;
+    color: #1a73e8;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s, border-color 0.2s;
+}
+.baike-link:hover {
+    background: #e8f0fe;
+    border-color: #b8cdf8;
+}
+
 .panel-body { padding: 16px 20px 20px; }
 .info-row {
     display: flex;
