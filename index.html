@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌍 中国护照签证查询地图</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div id="map"></div>
+    <div id="header">
+        <div class="header-left">
+            <span class="header-icon">🌍</span>
+            <h1>中国护照签证查询</h1>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索国家名称…" autocomplete="off" />
+                <div id="searchResults" class="search-results"></div>
+            </div>
+            <div class="legend">
+                <span class="legend-item"><span class="dot free"></span>免签</span>
+                <span class="legend-item"><span class="dot arrival"></span>落地签</span>
+                <span class="legend-item"><span class="dot evisa"></span>电子签</span>
+                <span class="legend-item"><span class="dot visa"></span>需签证</span>
+            </div>
+        </div>
+    </div>
+    <div id="panel" class="panel hidden">
+        <button id="panelClose" class="panel-close">&times;</button>
+        <div id="panelContent"></div>
+    </div>
+    <div id="hint" class="hint">👆 点击地图上的任意国家查看签证信息</div>
+    <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <span>正在识别国家…</span>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="visa-data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
