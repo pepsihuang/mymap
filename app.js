@@ -14,13 +14,58 @@ const map = L.map('map', {
 
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-// 瓦片源 - 尝试多个源，保证至少一个能用
+map.attributionControl.addAttribution('Country boundaries: Natural Earth');
+
+// 详细底图按需加载：默认不用外部瓦片，保证本地国家点击功能稳定可用。
 const tileUrls = [
     { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', opts: { subdomains: 'abcd', maxZoom: 20, attribution: '© OSM © CARTO' } },
     { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19, attribution: '© OpenStreetMap' } }
 ];
 
-let tileLayer = L.tileLayer(tileUrls[0].url, tileUrls[0].opts).addTo(map);
+let tileLayer = null;
+let baseMapEnabled = false;
+let activeTileIndex = 0;
+const mapToggle = document.getElementById('mapToggle');
+
+mapToggle.addEventListener('click', function() {
+    if (baseMapEnabled) {
+        if (tileLayer) {
+            map.removeLayer(tileLayer);
+            tileLayer = null;
+        }
+        baseMapEnabled = false;
+        activeTileIndex = 0;
+        mapToggle.classList.remove('active');
+        mapToggle.textContent = '🗺️ 详细底图';
+        return;
+    }
+
+    baseMapEnabled = true;
+    mapToggle.classList.add('active');
+    mapToggle.textContent = '🗺️ 已开启';
+    activeTileIndex = 0;
+    tileLayer = createTileLayer(activeTileIndex);
+    tileLayer.addTo(map);
+    if (colorLayer) colorLayer.bringToFront();
+});
+
+function createTileLayer(index) {
+    const source = tileUrls[index];
+    const layer = L.tileLayer(source.url, source.opts);
+    layer.on('load', function() {
+        if (colorLayer) colorLayer.bringToFront();
+        if (currentMarker) currentMarker.bringToFront();
+    });
+    layer.on('tileerror', function() {
+        if (activeTileIndex >= tileUrls.length - 1) return;
+        activeTileIndex++;
+        map.removeLayer(layer);
+        tileLayer = createTileLayer(activeTileIndex);
+        tileLayer.addTo(map);
+        if (colorLayer) colorLayer.bringToFront();
+    });
+    return layer;
+}
 
 // ========== 在地图上添加中文国名标签 ==========
 // 从 VISA_DATA 提取国家名，添加为永久标注
@@ -73,51 +118,15 @@ if (map.getZoom() >= 3) {
 setTimeout(addCountryLabels, 1000);
 
 // ========== 点击识别国家 ==========
-let isProcessing = false;
 let currentMarker = null;
+let handledCountryClick = false;
 
-map.on('click', async function(e) {
-    if (isProcessing) return;
-    isProcessing = true;
-
-    const loading = document.getElementById('loading');
-    const hint = document.getElementById('hint');
-    loading.classList.remove('hidden');
-    hint.classList.add('hidden');
-
-    const lat = e.latlng.lat;
-    const lng = e.latlng.lng;
-
+map.on('click', function() {
+    if (handledCountryClick) return;
+    document.getElementById('hint').classList.add('hidden');
     if (currentMarker) map.removeLayer(currentMarker);
-
-    try {
-        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=3&accept-language=zh-CN,zh,en`;
-        const resp = await fetch(url, { headers: { 'Accept-Language': 'zh-CN,zh,en' } });
-        const data = await resp.json();
-
-        let countryCode = null;
-        if (data.address && data.address.country_code) {
-            countryCode = data.address.country_code.toUpperCase();
-        }
-
-        if (countryCode && VISA_DATA[countryCode]) {
-            currentMarker = L.circleMarker([lat, lng], {
-                radius: 10, fillColor: '#4285f4', color: '#fff', weight: 3, fillOpacity: 0.9
-            }).addTo(map);
-            showVisaInfo(countryCode);
-        } else {
-            currentMarker = L.circleMarker([lat, lng], {
-                radius: 7, fillColor: '#999', color: '#fff', weight: 2, fillOpacity: 0.7
-            }).addTo(map);
-            showNoData(data.display_name || '海洋 / 无国家区域');
-        }
-    } catch (err) {
-        console.error('Geocoding error:', err);
-        showNoData('网络识别失败，请重试');
-    }
-
-    loading.classList.add('hidden');
-    isProcessing = false;
+    currentMarker = null;
+    showNoData('海洋 / 无国家区域');
 });
 
 // ========== 签证面板 ==========
@@ -134,23 +143,28 @@ function showVisaInfo(code) {
     const d = VISA_DATA[code];
     const s = POLICY[d.policy] || POLICY.none;
     const baikeUrl = `https://baike.baidu.com/item/${encodeURIComponent(d.cn)}`;
+    const xhsSearchUrl = (keyword) =>
+        `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(encodeURIComponent(keyword))}&source=web_explore_feed`;
+    const xhsLink = (label, keyword, className) =>
+        `<a class="${className}" href="${xhsSearchUrl(keyword)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    const infoLabel = (label) => xhsLink(label, `${d.cn} ${label}`, 'info-label xhs-link');
     let h = `
         <div class="panel-header">
             <div class="panel-flag">${d.flag}</div>
-            <div class="panel-country">${d.cn}</div>
+            <div class="panel-country">${xhsLink(d.cn, d.cn, 'panel-country-link xhs-link')}</div>
             <div class="panel-country-en">${d.en}</div>
             <div class="panel-status ${s.cls}">${s.txt} · ${s.label}</div>
             <a class="baike-link" href="${baikeUrl}" target="_blank" rel="noopener noreferrer">百度百科</a>
         </div>
         <div class="panel-body">
-            <div class="info-row"><div class="info-icon">⏱️</div><div class="info-content"><div class="info-label">可停留天数</div><div class="info-value highlight">${d.duration}</div></div></div>
-            <div class="info-row"><div class="info-icon">💰</div><div class="info-content"><div class="info-label">签证费用</div><div class="info-value">${d.fee}</div></div></div>
-            <div class="info-row"><div class="info-icon">⏳</div><div class="info-content"><div class="info-label">办理时长</div><div class="info-value">${d.process}</div></div></div>
-            <div class="info-row"><div class="info-icon">📅</div><div class="info-content"><div class="info-label">签证有效期</div><div class="info-value">${d.validity}</div></div></div>
-            <div class="info-row"><div class="info-icon">📋</div><div class="info-content"><div class="info-label">所需材料</div><div class="info-value">${d.requirements}</div></div></div>
+            <div class="info-row"><div class="info-icon">⏱️</div><div class="info-content">${infoLabel('可停留天数')}<div class="info-value highlight">${d.duration}</div></div></div>
+            <div class="info-row"><div class="info-icon">💰</div><div class="info-content">${infoLabel('签证费用')}<div class="info-value">${d.fee}</div></div></div>
+            <div class="info-row"><div class="info-icon">⏳</div><div class="info-content">${infoLabel('办理时长')}<div class="info-value">${d.process}</div></div></div>
+            <div class="info-row"><div class="info-icon">📅</div><div class="info-content">${infoLabel('签证有效期')}<div class="info-value">${d.validity}</div></div></div>
+            <div class="info-row"><div class="info-icon">📋</div><div class="info-content">${infoLabel('所需材料')}<div class="info-value">${d.requirements}</div></div></div>
         </div>`;
     if (d.tips && d.tips !== '—') {
-        h += `<div class="panel-tip"><div class="panel-tip-title">💡 实用贴士</div><div class="panel-tip-text">${d.tips}</div></div>`;
+        h += `<div class="panel-tip"><div class="panel-tip-title">💡 ${xhsLink('实用贴士', `${d.cn} 实用贴士`, 'panel-tip-link xhs-link')}</div><div class="panel-tip-text">${d.tips}</div></div>`;
     }
     document.getElementById('panelContent').innerHTML = h;
     document.getElementById('panel').classList.remove('hidden');
@@ -233,7 +247,7 @@ map.once('click', () => document.getElementById('hint').classList.add('hidden'))
 // ========== 签证配色地图 v2 ==========
 
 const GEOJSON_URLS = [
-    'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson'
+    'data/countries.geojson'
 ];
 
 const POLICY_COLORS = {
@@ -243,6 +257,14 @@ const POLICY_COLORS = {
     visa:    { fill: '#ea4335', stroke: '#c5221f', label: '需签证' },
     home:    { fill: '#ff6d00', stroke: '#e65100', label: '本国' },
     none:    { fill: '#cccccc', stroke: '#aaaaaa', label: '无数据' }
+};
+
+const DEFAULT_COUNTRY_STYLE = {
+    fillColor: '#f5f7fb',
+    fillOpacity: 0.28,
+    color: '#6b8fbd',
+    weight: 0.8,
+    opacity: 0.5
 };
 
 let colorLayer = null;
@@ -314,51 +336,46 @@ const NAME_TO_CODE = {
 
 const colorToggle = document.getElementById('colorToggle');
 
-colorToggle.addEventListener('click', async function() {
-    if (colorEnabled) {
-        if (colorLayer) { map.removeLayer(colorLayer); colorLayer = null; }
-        colorEnabled = false;
-        colorToggle.classList.remove('active');
-        colorToggle.textContent = '🎨 签证配色';
-        return;
-    }
+colorToggle.addEventListener('click', function() {
+    if (!colorLayer) return;
 
-    colorToggle.textContent = '⏳ 加载中…';
+    colorEnabled = !colorEnabled;
+    colorLayer.setStyle(getCountryStyle);
+    colorToggle.classList.toggle('active', colorEnabled);
+    colorToggle.textContent = colorEnabled ? '🎨 已开启' : '🎨 签证配色';
+});
 
+async function initCountryLayer() {
+    const loading = document.getElementById('loading');
+    loading.classList.remove('hidden');
     try {
-        if (!geoJsonCache) {
-            geoJsonCache = await loadGeoJson();
-        }
-
-        let matched = 0, total = 0, debugCodes = [];
+        geoJsonCache = await loadGeoJson();
+        let matched = 0;
 
         colorLayer = L.geoJSON(geoJsonCache, {
-            style: function(feature) {
-                const code = getCountryCode(feature);
-                const data = VISA_DATA[code];
-                const policy = data ? data.policy : 'none';
-                const colors = POLICY_COLORS[policy] || POLICY_COLORS.none;
-                if (data) matched++;
-                total++;
-                if (debugCodes.length < 10) debugCodes.push(code || '(empty)');
-                return {
-                    fillColor: colors.fill,
-                    fillOpacity: 0.55,
-                    color: colors.stroke,
-                    weight: 1.2,
-                    opacity: 0.9
-                };
-            },
+            bubblingMouseEvents: false,
+            style: getCountryStyle,
             onEachFeature: function(feature, layer) {
                 const code = getCountryCode(feature);
                 const data = VISA_DATA[code];
+                layer.on({
+                    mouseover: function() {
+                        layer.setStyle({ weight: colorEnabled ? 1.8 : 1.2, opacity: 0.95 });
+                    },
+                    mouseout: function() {
+                        colorLayer.resetStyle(layer);
+                    }
+                });
                 if (data) {
+                    matched++;
                     const s = POLICY_COLORS[data.policy] || POLICY_COLORS.none;
                     layer.bindTooltip(`${data.flag} ${data.cn}：${s.label}${data.duration !== '—' ? ' '+data.duration : ''}`, {
                         sticky: true, className: 'country-tooltip'
                     });
                     layer.on('click', function(e) {
-                        L.DomEvent.stopPropagation(e);
+                        handledCountryClick = true;
+                        setTimeout(() => { handledCountryClick = false; }, 0);
+                        if (e.originalEvent) L.DomEvent.stop(e.originalEvent);
                         showVisaInfo(code);
                         if (currentMarker) map.removeLayer(currentMarker);
                         currentMarker = L.circleMarker(e.latlng, {
@@ -369,27 +386,51 @@ colorToggle.addEventListener('click', async function() {
                 } else {
                     const name = feature.properties.ADMIN || '';
                     layer.bindTooltip(`🌍 ${name}：暂无数据`, { sticky: true, className: 'country-tooltip' });
+                    layer.on('click', function(e) {
+                        handledCountryClick = true;
+                        setTimeout(() => { handledCountryClick = false; }, 0);
+                        if (e.originalEvent) L.DomEvent.stop(e.originalEvent);
+                        if (currentMarker) map.removeLayer(currentMarker);
+                        currentMarker = null;
+                        showNoData(name || '暂无数据区域');
+                        document.getElementById('hint').classList.add('hidden');
+                    });
                 }
             }
         }).addTo(map);
 
-        console.log('Color:', matched + '/' + total, 'matched. Sample codes:', debugCodes.join(', '));
-        colorEnabled = true;
-        colorToggle.textContent = `🎨 已开启 (${matched}国)`;
-        colorToggle.classList.add('active');
-
+        colorToggle.title = `切换签证颜色地图：已匹配 ${matched} 个签证数据`;
+        console.log('Local country layer ready:', matched + '/' + geoJsonCache.features.length, 'matched');
     } catch(err) {
-        console.error('Color error:', err);
-        colorToggle.textContent = '❌ ' + err.message;
-        setTimeout(() => { colorToggle.textContent = '🎨 签证配色'; }, 3000);
+        console.error('Country layer error:', err);
+        showNoData('本地国家边界加载失败，请检查 data/countries.geojson');
+    } finally {
+        loading.classList.add('hidden');
     }
-});
+}
+
+function getCountryStyle(feature) {
+    if (!colorEnabled) return DEFAULT_COUNTRY_STYLE;
+    const code = getCountryCode(feature);
+    const data = VISA_DATA[code];
+    const policy = data ? data.policy : 'none';
+    const colors = POLICY_COLORS[policy] || POLICY_COLORS.none;
+    return {
+        fillColor: colors.fill,
+        fillOpacity: 0.55,
+        color: colors.stroke,
+        weight: 1.2,
+        opacity: 0.9
+    };
+}
 
 // 从 GeoJSON feature 提取国家代码
 function getCountryCode(feature) {
     const p = feature.properties || {};
     // 1. 直接取 ISO_A2
-    let code = String(p.ISO_A2 || '').trim().toUpperCase();
+    let code = String(p.ISO_A2_EH || p.ISO_A2 || '').trim().toUpperCase();
+    if (code && code !== '-1' && code !== '-99' && code.length === 2) return code;
+    code = String(p.ISO_A2 || '').trim().toUpperCase();
     if (code && code !== '-1' && code !== '-99' && code.length === 2) return code;
     // 2. 用英文名查映射
     const name = p.ADMIN || p.name || p.NAME || '';
@@ -420,4 +461,5 @@ async function loadGeoJson() {
     }
     throw new Error('GeoJSON加载失败，请检查网络');
 }
+initCountryLayer();
 console.log("Map ready. Countries:", Object.keys(VISA_DATA).length);

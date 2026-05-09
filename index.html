@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🌍 中国护照签证查询地图</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="assets/leaflet/leaflet.css" />
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -19,6 +19,7 @@
                 <input type="text" id="searchInput" placeholder="搜索国家名称…" autocomplete="off" />
                 <div id="searchResults" class="search-results"></div>
             </div>
+            <div class="map-toggle" id="mapToggle" title="加载或关闭详细底图">🗺️ 详细底图</div>
             <div class="color-toggle" id="colorToggle" title="切换签证颜色地图">🎨 签证配色</div>
             <div class="legend">
                 <span class="legend-item"><span class="dot free"></span>免签</span>
@@ -35,9 +36,9 @@
     <div id="hint" class="hint">👆 点击地图上的任意国家查看签证信息</div>
     <div id="loading" class="loading hidden">
         <div class="spinner"></div>
-        <span>正在识别国家…</span>
+        <span>正在加载地图…</span>
     </div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="assets/leaflet/leaflet.js"></script>
     <script src="visa-data.js"></script>
     <script src="app.js"></script>
 </body>
